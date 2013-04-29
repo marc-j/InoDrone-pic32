@@ -351,8 +351,7 @@ float IMU::getHeading(vector3f acc, vector3f mag)
 	mag.y = (mag.y - magMin.y) / (magMax.y - magMin.y) * 2 - 1.0;
 	mag.x = (mag.z - magMin.z) / (magMax.z - magMin.z) * 2 - 1.0;*/
 
-	/*float rollRads = acc.x * toRad;
-
+	float rollRads = acc.x * toRad;
 	float pitchRads = acc.y * toRad;
 
 	// Some of these are used twice, so rather than computing them twice in the algorithem we precompute them before hand.
@@ -375,9 +374,9 @@ float IMU::getHeading(vector3f acc, vector3f mag)
 		heading -= (2*M_PI);
 	}
 
-	return heading * toDeg;*/
+	return heading * toDeg;
 
-	float declinationAngle = 1.454 / 1000.0; // Magnetic Declination 0° 5' West at Fontenay sous bois France
+	/*float declinationAngle = 1.454 / 1000.0; // Magnetic Declination 0° 5' West at Fontenay sous bois France
 											 // http://www.wolframalpha.com/input/?i=%280%C2%B0+5%27%29+in+radians
 	float heading = atan2(mag.y, mag.x);
 	heading += declinationAngle;
@@ -388,10 +387,13 @@ float IMU::getHeading(vector3f acc, vector3f mag)
 	if (heading > 2*M_PI)
 		heading -= 2*M_PI;
 
-	return heading * toDeg;
+	return heading * toDeg;*/
 
 }
 
+/**
+ * It's not used
+ */
 void IMU::getMag(float roll, float pitch)
 {
   vector3 values;
