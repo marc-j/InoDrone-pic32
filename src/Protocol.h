@@ -9,7 +9,6 @@
 #define PROTOCOL_H_
 
 #include <inttypes.h>
-#include <p32xxxx.h>
 
 #include "UAVLink.h"
 #include "UAV.h"
@@ -21,14 +20,14 @@
 
 #define PROTOCOL_BUFFER_SIZE 256
 
-#define PROTOCOL_BRG (( __PIC32_pbClk / 4 / PROTOCOL_BAUDS ) -1 )
+#define PROTOCOL_BRG ((( __PIC32_pbClk / PROTOCOL_BAUDS) / 16 ) -1 )
 
 class Protocol {
 public:
 	Protocol();
 
 	void start(UAV *uav);
-	void receiveByte();
+	void receiveByte(const uint8_t data);
 	void write(uint8_t byte);
 
     enum PROTOCOL_STEP {

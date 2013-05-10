@@ -16,14 +16,21 @@ enum {
 };
 
 typedef struct _UAV {
+	unsigned long safe_timer;
 	uint8_t flightmode;
-	uint8_t landing;
+	uint8_t takeoff;
 	struct _CMD {
 		int16_t roll;
 		int16_t pitch;
 		int16_t yaw;
 		int16_t throttle;
 	} CMD;
+	struct _MOTOR {
+		uint16_t FL;
+		uint16_t FR;
+		uint16_t RL;
+		uint16_t RR;
+	} MOTOR;
 } UAV;
 
 #endif /* UAV_H_ */

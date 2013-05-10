@@ -31,13 +31,13 @@ Kalman::Kalman()
 
 	// COVARIANCE NOISE //
 	// Accelerometer (see IMU::getAccelMeasurementNoise)
-	R.mat[0][0] = 0.026;
-	R.mat[1][1] = 0.028;
-	R.mat[2][2] = 0.025;
+	R.mat[0][0] = 0.026f;
+	R.mat[1][1] = 0.028f;
+	R.mat[2][2] = 0.025f;
 	// Gyroscope (see IMU::getGyroMeasurementNoise)
-	Q.mat[0][0] = 0.005;
-	Q.mat[1][1] = 0.005;
-	Q.mat[2][2] = 0.0001;
+	Q.mat[0][0] = 0.005f;
+	Q.mat[1][1] = 0.005f;
+	Q.mat[2][2] = 0.0001f;
 	/*
 	Q.mat[0][0] = 0.00007;
 	Q.mat[1][1] = 0.0001;

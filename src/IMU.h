@@ -9,6 +9,7 @@
 #define IMU_H_
 
 #include "MPU6050.h"
+#include "MS561101BA.h"
 #include "DCM.h"
 #include "Kalman.h"
 #include "Matrix.h"
@@ -33,17 +34,11 @@
 #define ACC_OFFSET_Y -352
 #define ACC_OFFSET_Z 1192
 
-/*
-    [12.952730780929429, 13.177076410003499, -51.21240188153007]
-    [191.62254532125752, 163.31965459240323, 194.61254306359552]
- */
-#define MAG_SCALE_X 191.62254532125752f
-#define MAG_SCALE_Y 163.31965459240323f
-#define MAG_SCALE_Z 194.61254306359552f
+#define MAG_OFFSET_X -38
+#define MAG_OFFSET_Y 136
+#define MAG_OFFSET_Z -31
 
-#define MAG_OFFSET_X 13
-#define MAG_OFFSET_Y 13
-#define MAG_OFFSET_Z -51
+#define MOVAVG_SIZE 32
 
 class IMU {
 public:
@@ -66,12 +61,23 @@ public:
     } EULER;
   } attitude12f;
 
+  typedef struct __minmaxf {
+	  float min;
+	  float max;
+  } minmaxf;
+
+  typedef struct __minmax3f {
+	  minmaxf x;
+	  minmaxf y;
+	  minmaxf z;
+  } minmax3f;
+
   void init();
   void getMotion9(motion9f*);
   void getRawValues(int16_t*);
 
   void getAttitude(attitude12f*);
-  void getMag(float roll, float pitch);
+  float getAltitude();
 
   vector3f getAccelMeasurementNoise();
   vector3f getGyroMeasurementNoise();
@@ -84,6 +90,7 @@ private:
   float getHeading(vector3f acc, vector3f mag);
 
   MPU6050 mpu6050;
+  MS561101BA baro;
 #ifdef _WITH_DCM_
   DCM dcm;
 #else
@@ -95,6 +102,10 @@ private:
   vector3 accOffset;
 
   motion9f sensorsSens;
+  minmax3f magLimit;
+
+  float movavg_buff[MOVAVG_SIZE];
+  int movavg_i;
 
   volatile float q0, q1, q2, q3;
   float G_Dt;

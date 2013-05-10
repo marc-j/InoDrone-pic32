@@ -36,9 +36,14 @@ IMU::IMU()
   sensorsSens.MAG.y = -1;
   sensorsSens.MAG.z = -1;
 
+  magLimit.x = { -200.0f , 200.0f };
+  magLimit.y = { -200.0f , 200.0f };
+  magLimit.z = { -200.0f , 200.0f };
+
   accelOneG = GRAVITY;
-  hdgY = 0.0;
-  hdgX = 0.0;
+  movavg_i = 0;
+
+  baro = MS561101BA();
 }
 
 void IMU::init()
@@ -53,6 +58,13 @@ void IMU::init()
   I2C::writeByte(HMC5883_ADDRESS, 0x02, 0x00); //continuous Conversion Mode
 
   mpu6050.enableI2CAux();
+
+  baro.init(MS561101BA_ADDR_CSB_LOW);
+  delay(100);
+  // populate movavg_buff before starting loop
+  for(int i=0; i<MOVAVG_SIZE; i++) {
+    movavg_buff[i] = baro.getPressure(MS561101BA_OSR_4096);
+  }
 
 #ifdef _WITH_DCM_
   dcm = DCM();
@@ -128,16 +140,30 @@ void IMU::getMotion9(IMU::motion9f* sensors)
   sensors->GYRO.y = ( (sensorsRaw.GYRO.y - gyroOffset.y) / 16.4f ) * sensorsSens.GYRO.y; // 16.4 LSB/°/s (+/- 2000 °/s)
   sensors->GYRO.z = ( (sensorsRaw.GYRO.z - gyroOffset.z) / 16.4f ) * sensorsSens.GYRO.z; // 16.4 LSB/°/s (+/- 2000 °/s)
 
-  sensors->MAG.x = sensorsRaw.MAG.x * sensorsSens.MAG.x * 0.92f;
-  sensors->MAG.y = sensorsRaw.MAG.y * sensorsSens.MAG.y * 0.92f;
-  sensors->MAG.z = sensorsRaw.MAG.z * sensorsSens.MAG.z * 0.92f; // 0.92 (scale for 1.3Ga)
+  sensors->MAG.x = ((sensorsRaw.MAG.x * sensorsSens.MAG.x) - MAG_OFFSET_X) / 1090.0f;
+  sensors->MAG.y = ((sensorsRaw.MAG.y * sensorsSens.MAG.y) - MAG_OFFSET_Y) / 1090.0f;
+  sensors->MAG.z = ((sensorsRaw.MAG.z * sensorsSens.MAG.z) - MAG_OFFSET_Z) / 1090.0f; // removed scale * 0.92 (scale for 1.3Ga)
+
+  // Centered MAG
+  // Auto recalculate center
+  /*magLimit.x.min = min(sensors->MAG.x, magLimit.x.min);
+  magLimit.x.max = max(sensors->MAG.x, magLimit.x.max);
+  magLimit.y.min = min(sensors->MAG.y, magLimit.y.min);
+  magLimit.y.max = max(sensors->MAG.y, magLimit.y.max);
+  magLimit.z.min = min(sensors->MAG.z, magLimit.z.min);
+  magLimit.z.max = max(sensors->MAG.z, magLimit.z.max);
+
+  sensors->MAG.x -= ((magLimit.x.max + magLimit.x.min) / 2);
+  sensors->MAG.y -= ((magLimit.y.max + magLimit.y.min) / 2);
+  sensors->MAG.z -= ((magLimit.z.max + magLimit.z.min) / 2);*/
+
 }
 
 void IMU::getRawValues(int16_t* values)
 {
   mpu6050.getMotion9(&values[0], &values[1], &values[2],
                      &values[4], &values[3], &values[5],
-                     &values[6], &values[7], &values[8]);
+                     &values[6], &values[8], &values[7]);
 
   values[0] *= sensorsSens.ACC.x;
   values[1] *= sensorsSens.ACC.y;
@@ -146,6 +172,10 @@ void IMU::getRawValues(int16_t* values)
   values[3] *= sensorsSens.GYRO.x;
   values[4] *= sensorsSens.GYRO.y;
   values[5] *= sensorsSens.GYRO.z;
+
+  values[6] *= sensorsSens.MAG.x;
+  values[7] *= sensorsSens.MAG.y;
+  values[8] *= sensorsSens.MAG.z;
 }
 
 void IMU::getAttitude(IMU::attitude12f* attitude)
@@ -186,9 +216,9 @@ void IMU::getAttitude(IMU::attitude12f* attitude)
 
     vector3f kAngles = kalman->compute();
 
-    angles[0] = vAngles.x;//kAngles.x;//kalmanRoll->innovate(roll, values.GYRO.y, G_Dt);
-    angles[1] = vAngles.y; //kAngles.y;//kalmanPitch->innovate(pitch, values.GYRO.x, G_Dt);
-    angles[2] = heading; // TODO: replace with kAngles.z
+    angles[0] = kAngles.x;//kalmanRoll->innovate(roll, values.GYRO.y, G_Dt);
+    angles[1] = kAngles.y;//kalmanPitch->innovate(pitch, values.GYRO.x, G_Dt);
+    angles[2] = kAngles.z;
 #endif
 
     attitude->ACC.x = values.ACC.x;
@@ -212,7 +242,8 @@ vector3f IMU::getAccelAngle(vector3f *acc)
 {
 	vector3f angles = {0,0,0};
 	double R = sqrt((acc->x*acc->x) + (acc->y*acc->y) + (acc->z*acc->z));
-
+	//angles.x = atan2(acc->x, acc->z) * toDeg;
+	//angles.y = atan2(acc->y, acc->z) * toDeg;
 	if (acc->z < 0) {
 		angles.x = -acos(acc->x / R)*toDeg;
 		angles.y = -acos(acc->y / R)*toDeg;
@@ -235,11 +266,14 @@ vector3f IMU::getAccelAngle(vector3f *acc)
 		angles.y +=360;
 	}
 
+	angles.x = -angles.x;
+	angles.y = -angles.y;
+
 	// Ensures that Z gets negative if pointing downward
-	if (angles.x<0)
+	/*if (angles.x<0)
 	{
 		angles.z = - angles.z;
-	}
+	}*/
 
 	return angles;
 }
@@ -313,66 +347,25 @@ vector3f IMU::getGyroMeasurementNoise()
 
     return variance;
 }
-// -492 , 579
+
+/**
+ *
+ */
 float IMU::getHeading(vector3f acc, vector3f mag)
 {
-	/*vector3f magMin = {-535.0f, -451.0f, -650.0f};
-	vector3f magMax = {575.0f, 482.0f, 223.0f};
-	vector3f p = {0, -1, 0};
 
-	mag->x = (mag->x - magMin.x) / (magMax.x - magMin.x) * 2 - 1.0;
-	mag->y = (mag->y - magMin.y) / (magMax.y - magMin.y) * 2 - 1.0;
-	mag->x = (mag->z - magMin.z) / (magMax.z - magMin.z) * 2 - 1.0;
+	float roll = acc.x * toRad;
+	float pitch = acc.y * toRad;
 
-	vector3f E, N;
+	float cosRoll = cos(roll);
+	float sinRoll = sin(roll);
+	float cosPitch = cos(pitch);
+	float sinPitch = sin(pitch);
 
+    float Xh = (mag.x * cosRoll) + (mag.y * sinPitch * sinRoll) - (mag.z * cosPitch * sinRoll);
+    float Yh = (mag.y * cosPitch) - (mag.z * sinPitch);
 
-	// cross magnetic vector (magnetic north + inclination) with "down" (acceleration vector) to produce "east"
-	vector_cross(mag, acc, &E);
-	vector_normalize(&E);
-
-	// cross "down" with "east" to produce "north" (parallel to the ground)
-	vector_cross(acc, &E, &N);
-	vector_normalize(&N);
-
-	float heading = round(atan2(vector_dot(&E, &p), vector_dot(&N, &p)) * 180 / M_PI);
-
-	if (heading > 180) {
-		heading -= 360;
-	}
-	if (heading < -180) {
-		heading += 360;
-	}*/
-
-	/*vector3f magMin = {-535.0f, -451.0f, -650.0f};
-	vector3f magMax = {575.0f, 482.0f, 223.0f};
-
-	mag.x = (mag.x - magMin.x) / (magMax.x - magMin.x) * 2 - 1.0;
-	mag.y = (mag.y - magMin.y) / (magMax.y - magMin.y) * 2 - 1.0;
-	mag.x = (mag.z - magMin.z) / (magMax.z - magMin.z) * 2 - 1.0;*/
-
-	float rollRads = acc.x * toRad;
-	float pitchRads = acc.y * toRad;
-
-	// Some of these are used twice, so rather than computing them twice in the algorithem we precompute them before hand.
-	float cosRoll = cos(rollRads);
-	float sinRoll = sin(rollRads);
-	float cosPitch = cos(pitchRads);
-	float sinPitch = sin(pitchRads);
-
-	// The tilt compensation algorithem.
-	float Xh = mag.x * cosPitch + mag.y * sinRoll * sinPitch + mag.z * cosRoll * sinPitch;
-	float Yh = mag.y * cosRoll - mag.z * sinRoll;
-
-	float heading = atan2(Yh, Xh);
-
-	if (heading < 0) {
-		heading += (2*M_PI);
-	}
-
-	if (heading > M_PI) {
-		heading -= (2*M_PI);
-	}
+    float heading = atan2(Yh, Xh);
 
 	return heading * toDeg;
 
@@ -388,35 +381,27 @@ float IMU::getHeading(vector3f acc, vector3f mag)
 		heading -= 2*M_PI;
 
 	return heading * toDeg;*/
-
 }
 
 /**
- * It's not used
+ *
  */
-void IMU::getMag(float roll, float pitch)
+float IMU::getAltitude()
 {
-  vector3 values;
-  mpu6050.getMag(&values.x, &values.y, &values.z);
+	float temperature = baro.getTemperature(MS561101BA_OSR_4096);
+	float press = baro.getPressure(MS561101BA_OSR_4096);
+	if (press!=NULL) {
+		  movavg_buff[movavg_i] = press;
+		  movavg_i = (movavg_i + 1) % MOVAVG_SIZE;
+	}
 
-  values.x *= sensorsSens.MAG.x;
-  values.y *= sensorsSens.MAG.x;
-  values.z *= sensorsSens.MAG.x;
+	float sum = 0.0;
+	for (int i=0; i<MOVAVG_SIZE;i++) {
+		sum += movavg_buff[i];
+	}
 
-  const float cosRoll =  cos(roll);
-  const float sinRoll =  sin(roll);
-  const float cosPitch = cos(pitch);
-  const float sinPitch = sin(pitch);
+	press = sum / MOVAVG_SIZE;
 
-  const float magX = (float)values.x * cosPitch +
-                     (float)values.y * sinRoll * sinPitch +
-                     (float)values.z * cosRoll * sinPitch;
+	return baro.getAltitude(press, temperature);
 
-  const float magY = (float)values.y * cosRoll -
-                     (float)values.z * sinRoll;
-
-  const float tmp  = sqrt(magX * magX + magY * magY);
-
-  hdgX = magX / tmp;
-  hdgY = magY / tmp;
 }

@@ -9,6 +9,7 @@ uavlink_message_sensor_t sensor;
 uavlink_message_sensor_raw_t sensorRaw;
 uavlink_message_system_t systemInfo;
 
+
 /**
  * Oups! Not working if in Protocol.cpp
  * Serial break
@@ -32,26 +33,48 @@ void sendMessage(uavlink_message_t msg)
 
 void setup()
 {
+	uav.safe_timer = 0;
 	uav.flightmode = FLIGHTMODE_WAITING;
-	uav.landing = 0;
+	uav.takeoff = 0;
 	uav.CMD.roll = 0;
 	uav.CMD.pitch = 0;
 	uav.CMD.yaw = 0;
 	uav.CMD.throttle = 0;
+	uav.MOTOR.FL = VAL_PPM_MIN;
 
 	protocol.start(&uav);
 
 	imu = IMU();
 	imu.init();
 
-	//Serial.begin(9600);
+	motor = ServoControl();
+	motor.init();
+
+
+	//Serial.begin(57600);
 }
 
 void loop()
 {
+
+	/*while(Serial.read() != 0x20);
+	int16_t sraw[9];
+	imu.getRawValues(sraw);
+
+	Serial.write(sraw[6]);
+	Serial.write(sraw[6]>>8);
+	Serial.write(sraw[7]);
+	Serial.write(sraw[7]>>8);
+	Serial.write(sraw[8]);
+	Serial.write(sraw[8]>>8);
+	Serial.write('\n');
+
+	return;*/
+
 	// FailSAFE
 	if(millis()-safe_timer >= 50){ // 50ms soit 20hz
-		//TODO: Flight off
+		uav.flightmode = FLIGHTMODE_WAITING;
+		//ERROR_RECV; BIPPPPPPPP
 	}
 
 	if (millis()-timerMain >= 10) { // 10ms -> 100hz
@@ -63,8 +86,11 @@ void loop()
 		imu.getAttitude(&attitude);
 
 		if (uav.flightmode == FLIGHTMODE_WAITING) { //Waiting for instruction
+			CUTOFF; // STOP MOTOR
 
 		} else if (uav.flightmode == FLIGHTMODE_VARIANCE) { // get variance for Acc and Gyro
+			CUTOFF;
+
 			vector3f accVariance = imu.getAccelMeasurementNoise();
 			vector3f gyroVariance = imu.getGyroMeasurementNoise();
 
@@ -81,19 +107,36 @@ void loop()
 			msgSensorVariance = uavlink_message_sensor_variance_encode(&sensorVariance);
 			sendMessage(msgSensorVariance);
 
-			uav.flightmode = 0;
-		} else if (uav.flightmode == FLIGHTMODE_COMPASS_CALIBRATION) { // Compass calibration
-			//TODO imu getCompassCalibration
+			uav.flightmode = FLIGHTMODE_WAITING;
 		} else if (uav.flightmode == FLIGHTMODE_NORMAL) { // Normal mode waiting to landing
+			if (uav.takeoff == 0 ) {
+				STOP_MOTOR; // Stop motor
+			} else {
+				// STOP MOTOR and takeoff = false if angle > |20|
+				if ( abs(attitude.EULER.pitch) > 20 || abs(attitude.EULER.roll) > 20 ) {
+					CUTOFF;
+				} else {
+					uav.CMD.throttle = mapMotorCmd(uav.CMD.throttle);
 
+					uav.MOTOR.FL = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.FR = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.RL = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.RR = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
+				}
+			}
 		}
 
+		// Send command to motor
+		motor.setMotor(MFL, uav.MOTOR.FL);
+		motor.setMotor(MFR, uav.MOTOR.FR);
+		motor.setMotor(MRL, uav.MOTOR.RL);
+		motor.setMotor(MRR, uav.MOTOR.RR);
 
 
 		if (millis()-telemetryTimer >= 100 ) { // 100ms soit 10hz
-		    imu.getMag(attitude.EULER.roll, attitude.EULER.pitch);
+			/*float alt = imu.getAltitude();
+			Serial.println(alt);*/
 
-			//memcpy(&sensor, (const char *)&IMU, 12);
 			sensor.accX = (int16_t) (attitude.ACC.x*1000.0f);
 			sensor.accY = (int16_t) (attitude.ACC.y*1000.0f);
 			sensor.accZ = (int16_t) (attitude.ACC.z*1000.0f);
@@ -103,19 +146,14 @@ void loop()
             sensor.magX = (int16_t) (attitude.MAG.x*10.0f);
             sensor.magY = (int16_t) (attitude.MAG.y*10.0f);
             sensor.magZ = (int16_t) (attitude.MAG.z*10.0f);
-			/*sensor.pitch = (int16_t) (degrees(attitude.EULER.pitch)*10.0f);
-			sensor.roll = (int16_t) (degrees(attitude.EULER.roll)*10.0f);
-			sensor.yaw = (int16_t) (degrees(attitude.EULER.yaw)*10.0f);*/
 			sensor.pitch = (int16_t) (attitude.EULER.pitch*10.0f);
 			sensor.roll = (int16_t) (attitude.EULER.roll*10.0f);
 			sensor.yaw = (int16_t) (attitude.EULER.yaw*10.0f);
 
-			uavlink_message_t msgSensor;
-			msgSensor = uavlink_message_sensor_encode(&sensor);
-			sendMessage(msgSensor);
+			sendMessage(uavlink_message_sensor_encode(&sensor));
 
 			// Send raw sensor values
-			int16_t sraw[9];
+			/*int16_t sraw[9];
 			imu.getRawValues(sraw);
 			sensorRaw.accX = sraw[0];
 			sensorRaw.accY = sraw[1];
@@ -127,9 +165,7 @@ void loop()
 			sensorRaw.magY = sraw[7];
 			sensorRaw.magZ = sraw[8];
 
-			uavlink_message_t msgSensorRaw;
-			msgSensorRaw = uavlink_message_sensor_raw_encode(&sensorRaw);
-			sendMessage(msgSensorRaw);
+			sendMessage(uavlink_message_sensor_raw_encode(&sensorRaw));*/
 
 
 			systemInfo.cpuLoad = (uint16_t) (cpu_load*1000.0f);
@@ -137,9 +173,7 @@ void loop()
 			systemInfo.batteryVoltage = 0;
 			systemInfo.mainLoopTime = (uint16_t) (timerMain-timerMain_old)*1000;
 
-			uavlink_message_t msgSystem;
-			msgSystem = uavlink_message_system_encode(&systemInfo);
-			sendMessage(msgSystem);
+			sendMessage(uavlink_message_system_encode(&systemInfo));
 
 			telemetryTimer = millis();
 		}
