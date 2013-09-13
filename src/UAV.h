@@ -8,11 +8,14 @@
 #ifndef UAV_H_
 #define UAV_H_
 
+#include "PID.h"
+
 enum {
 	FLIGHTMODE_WAITING,
 	FLIGHTMODE_VARIANCE,
 	FLIGHTMODE_COMPASS_CALIBRATION,
-	FLIGHTMODE_NORMAL
+	FLIGHTMODE_NORMAL,
+	FLIGHTMODE_ESC_CALIBRATION
 };
 
 typedef struct _UAV {
@@ -31,6 +34,9 @@ typedef struct _UAV {
 		uint16_t RL;
 		uint16_t RR;
 	} MOTOR;
+	PID* rollPID;
+	PID* pitchPID;
+	PID* yawPID;
 } UAV;
 
 #endif /* UAV_H_ */

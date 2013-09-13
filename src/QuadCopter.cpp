@@ -8,6 +8,7 @@
 uavlink_message_sensor_t sensor;
 uavlink_message_sensor_raw_t sensorRaw;
 uavlink_message_system_t systemInfo;
+uavlink_message_motor_t motorInfo;
 
 
 /**
@@ -40,7 +41,10 @@ void setup()
 	uav.CMD.pitch = 0;
 	uav.CMD.yaw = 0;
 	uav.CMD.throttle = 0;
-	uav.MOTOR.FL = VAL_PPM_MIN;
+
+	uav.rollPID = new PID(0.0f,0.0f,0.0f);
+	uav.pitchPID = new PID(0.0f,0.0f,0.0f);
+	uav.yawPID = new PID(0.0f,0.0f,0.0f);
 
 	protocol.start(&uav);
 
@@ -72,7 +76,7 @@ void loop()
 	return;*/
 
 	// FailSAFE
-	if(millis()-safe_timer >= 50){ // 50ms soit 20hz
+	if(millis()-uav.safe_timer >= 150){ // 50ms soit 20hz
 		uav.flightmode = FLIGHTMODE_WAITING;
 		//ERROR_RECV; BIPPPPPPPP
 	}
@@ -112,16 +116,19 @@ void loop()
 			if (uav.takeoff == 0 ) {
 				STOP_MOTOR; // Stop motor
 			} else {
-				// STOP MOTOR and takeoff = false if angle > |20|
-				if ( abs(attitude.EULER.pitch) > 20 || abs(attitude.EULER.roll) > 20 ) {
+				// STOP MOTOR and takeoff = false if angle > |30|
+				if ( abs(attitude.EULER.pitch) > 30 || abs(attitude.EULER.roll) > 30 ) {
 					CUTOFF;
 				} else {
-					uav.CMD.throttle = mapMotorCmd(uav.CMD.throttle);
+					uint16_t thrust = mapMotorCmd(uav.CMD.throttle);
 
-					uav.MOTOR.FL = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
-					uav.MOTOR.FR = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
-					uav.MOTOR.RL = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
-					uav.MOTOR.RR = constrain(uav.CMD.throttle , VAL_PPM_MIN, VAL_PPM_MAX);
+					float stabRoll = uav.rollPID->calculate(uav.CMD.roll - attitude.EULER.roll, G_Dt);
+					float stabPitch = uav.pitchPID->calculate(uav.CMD.pitch - attitude.EULER.pitch, G_Dt);
+
+					uav.MOTOR.FL = constrain(thrust - stabRoll - stabPitch, VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.FR = constrain(thrust + stabRoll - stabPitch, VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.RL = constrain(thrust - stabRoll + stabPitch, VAL_PPM_MIN, VAL_PPM_MAX);
+					uav.MOTOR.RR = constrain(thrust + stabRoll + stabPitch, VAL_PPM_MIN, VAL_PPM_MAX);
 				}
 			}
 		}
@@ -151,6 +158,12 @@ void loop()
 			sensor.yaw = (int16_t) (attitude.EULER.yaw*10.0f);
 
 			sendMessage(uavlink_message_sensor_encode(&sensor));
+
+			motorInfo.motorFrontLeft = uav.MOTOR.FL;
+			motorInfo.motorFrontRight = uav.MOTOR.FR;
+			motorInfo.motorRearLeft = uav.MOTOR.RL;
+			motorInfo.motorRearRight = uav.MOTOR.RR;
+			sendMessage(uavlink_message_motor_encode(&motorInfo));
 
 			// Send raw sensor values
 			/*int16_t sraw[9];

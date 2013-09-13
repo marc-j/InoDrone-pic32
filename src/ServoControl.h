@@ -21,7 +21,7 @@
 
 #define VAL_PPM_MAX        3000 //PB_CLOCK_2MS/64
 #define VAL_PPM_CENTER     PB_CLOCK_1_5MS/64
-#define VAL_PPM_MIN        600 //PB_CLOCK_1MS/64
+#define VAL_PPM_MIN        700 //PB_CLOCK_1MS/64
 
 class ServoControl {
 public:

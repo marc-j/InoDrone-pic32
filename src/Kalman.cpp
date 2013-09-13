@@ -35,14 +35,14 @@ Kalman::Kalman()
 	R.mat[1][1] = 0.028f;
 	R.mat[2][2] = 0.025f;
 	// Gyroscope (see IMU::getGyroMeasurementNoise)
-	Q.mat[0][0] = 0.005f;
+	/*Q.mat[0][0] = 0.005f;
 	Q.mat[1][1] = 0.005f;
-	Q.mat[2][2] = 0.0001f;
-	/*
-	Q.mat[0][0] = 0.00007;
-	Q.mat[1][1] = 0.0001;
-	Q.mat[2][2] = 0.0002;
-	 */
+	Q.mat[2][2] = 0.0001f;*/
+
+	Q.mat[0][0] = 0.00007f;
+	Q.mat[1][1] = 0.0001f;
+	Q.mat[2][2] = 0.0002f;
+
 }
 
 void Kalman::setAccValues(vector3f acc)

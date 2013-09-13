@@ -12,9 +12,13 @@
 #include "ServoControl.h"
 #include "Protocol.h"
 #include "UAVLink.h"
+#include "PID.h"
 #include "UAV.h"
 
 #define CUTOFF STOP_MOTOR; uav.takeoff = 0;
+#define ROLL 1
+#define PITCH 2
+#define YAW 3
 
 /********************************
  MOTOR
@@ -31,9 +35,9 @@
 
 // Define OC(x)
 #define MFL 0
-#define MFR 1
+#define MFR 3
 #define MRL 2
-#define MRR 3
+#define MRR 1
 /*****************************************/
 
 IMU::attitude12f attitude;

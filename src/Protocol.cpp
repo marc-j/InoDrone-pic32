@@ -121,6 +121,22 @@ void Protocol::datasReceive(const uint8_t* datas)
 			uav->flightmode 	= command.flightMode;
 			uav->takeoff 		= command.armed;
 			break;
+		case UAVLINK_MSG_PID:
+			uavlink_message_pid_t pid;
+			uavlink_message_pid_decode(&msg, &pid);
+
+			uav->rollPID->setKp(pid.rollKP / 1000.0f);
+			uav->rollPID->setKi(pid.rollKI / 1000.0f);
+			uav->rollPID->setKd(pid.rollKD / 1000.0f);
+
+			uav->pitchPID->setKp(pid.pitchKP / 1000.0f);
+			uav->pitchPID->setKi(pid.pitchKI / 1000.0f);
+			uav->pitchPID->setKd(pid.pitchKD / 1000.0f);
+
+			uav->yawPID->setKp(pid.yawKP / 1000.0f);
+			uav->yawPID->setKi(pid.yawKI / 1000.0f);
+			uav->yawPID->setKd(pid.yawKD / 1000.0f);
+			break;
 	}
 }
 

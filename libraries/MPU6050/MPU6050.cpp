@@ -22,7 +22,7 @@ void MPU6050::initialize()
 	I2C::writeByte(devAddr, MPU6050_RA_PWR_MGMT_1, 0x80 ); // RESET MPU
 	delay(50);
 	I2C::writeByte(devAddr, MPU6050_RA_PWR_MGMT_1, MPU6050_CLOCK_PLL_XGYRO); // Set clock to Z GYRO
-	I2C::writeByte(devAddr, MPU6050_RA_CONFIG, MPU6050_DLPF_BW_256); // LP ACC => 260Hz, GYRO 256 Hz
+	I2C::writeByte(devAddr, MPU6050_RA_CONFIG, MPU6050_DLPF_BW_20); // LP ACC => 260Hz, GYRO 256 Hz
 	I2C::writeByte(devAddr, MPU6050_RA_GYRO_CONFIG, MPU6050_GYRO_FS_2000 << 3); // Gyro FS_SEL = 3: Full scale set to 2000 deg/sec
 	I2C::writeByte(devAddr, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACCEL_FS_2 << 3); // ACC FS_SEL = 3: Full scale set to 2 g/sec
 	I2C::writeByte(devAddr, MPU6050_RA_INT_PIN_CFG, 0x02); // I2C_BYPASS_EN=1
