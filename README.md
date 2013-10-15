@@ -1,4 +1,6 @@
-NeuroDrone-pic32
+InoDrone-pic32
 ================
 
-PIC32 auto-pilote for quadcopter
+PIC32 autopilote for multirotor
+
+/!\ This code is under development, it's not tested and approved for flying
