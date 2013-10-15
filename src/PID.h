@@ -17,6 +17,10 @@ public:
 	void setKp(float kP);
 	void setKi(float kI);
 	void setKd(float kD);
+
+	float getKp();
+	float getKi();
+	float getKd();
 private:
 	float kP;
 	float kI;

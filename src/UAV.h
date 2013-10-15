@@ -9,6 +9,7 @@
 #define UAV_H_
 
 #include "PID.h"
+#include "Radio.h"
 
 enum {
 	FLIGHTMODE_WAITING,
@@ -37,6 +38,7 @@ typedef struct _UAV {
 	PID* rollPID;
 	PID* pitchPID;
 	PID* yawPID;
+	Radio* rc;
 } UAV;
 
 #endif /* UAV_H_ */

@@ -30,7 +30,7 @@ void ServoControl::init()
 	// interrupts every 4 ms
 	// 4 ms = (PR2 + 1) * TMR Prescale / Fpb = (39999 + 1) * 8 / 80000000
 	CloseTimer3();
-	OpenTimer3(T3_ON | T3_PS_1_64,T2_PERIOD);
+	OpenTimer3(T3_ON | T3_PS_1_64, T2_PERIOD);
 	/*ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_7);
 
 	mT2SetIntPriority( 7);    // set Timer2 Interrupt Priority

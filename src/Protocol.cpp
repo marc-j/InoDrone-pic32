@@ -19,11 +19,28 @@ Protocol::Protocol() {
 	buffer_pos = 0;
 	len = 0;
 	crc = 0;
+
+	connected = 0;
+	status = WAITING;
+	bufferBee_pos = 0;
+	stepBee = 0;
 }
 
 void Protocol::start(UAV *uav)
 {
 	this->uav = uav;
+
+	step = STX1;
+	buffer_pos = 0;
+	len = 0;
+	crc = 0;
+
+	connected = 0;
+	status = WAITING;
+	bufferBee_pos = 0;
+	stepBee = 0;
+
+
 	U5STA = 0;
 	U5MODE = 0;
 	U5MODEbits.PDSEL = 0; // 0 = 8bit data, no parity
@@ -42,12 +59,37 @@ void Protocol::start(UAV *uav)
 	// Set Interrupt priorities
 	INTSetVectorPriority((INT_VECTOR)INT_VECTOR_UART(UART5), INT_PRIORITY_LEVEL_2);
 	INTSetVectorSubPriority((INT_VECTOR)INT_VECTOR_UART(UART5), INT_SUB_PRIORITY_LEVEL_0);
+
+	// Init Bluetooth Modem
+	/*print("\r\n+STWMOD=0\r\n");
+	print("\r\n+STNA=InoDrone\r\n");
+	print("\r\n+STAUTO=0\r\n");
+	print("\r\n+STOAUT=1\r\n");
+	print("\r\n+STPIN=0000\r\n");
+	delay(2000);*/
+
 }
 
 void Protocol::receiveByte(const uint8_t data)
 {
-	write(data);
+	char c = char(data);
 
+	// Check modem command
+	if (bufferBee_pos == 0 && c == '\r') {
+		stepBee = 0;
+	} else if (c == '\n' && stepBee == 0) {
+		stepBee = 1;
+		bufferBee_pos = 0;
+	} else if (stepBee == 1 && c == '\r') {
+		bufferBee_pos = 0;
+		stepBee = 0;
+		modemReceive(bufferBee);
+		return;
+	} else if (stepBee == 1) {
+		bufferBee[bufferBee_pos++] = c;
+	}
+
+	// Check UAVLink
     switch(step) {
         case STX1:
             if (data == 0xFF)
@@ -98,6 +140,25 @@ void Protocol::receiveByte(const uint8_t data)
 
 }
 
+uint8_t Protocol::isConnected()
+{
+	return connected;
+}
+
+void Protocol::modemReceive(const char* command)
+{
+	  if (command[0] == 'O' && command[1] == 'K') {
+	  } else if (command[9] == '4') {
+	     connected = 1;
+	     status = PAIRING;
+	     PORTCbits.RC2 = 1;
+	  } else if (command[9] != '4') {
+		 connected = 0;
+		 status = WAITING;
+		 PORTCbits.RC2 = 0;
+	  }
+}
+
 void Protocol::datasReceive(const uint8_t* datas)
 {
 	uav->safe_timer = millis();
@@ -137,6 +198,13 @@ void Protocol::datasReceive(const uint8_t* datas)
 			uav->yawPID->setKi(pid.yawKI / 1000.0f);
 			uav->yawPID->setKd(pid.yawKD / 1000.0f);
 			break;
+	}
+}
+
+void Protocol::print(const char *str)
+{
+	while (*str) {
+		write(*str++);
 	}
 }
 

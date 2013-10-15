@@ -27,8 +27,11 @@ public:
 	Protocol();
 
 	void start(UAV *uav);
+	uint8_t isConnected();
 	void receiveByte(const uint8_t data);
 	void write(uint8_t byte);
+	void print(const char *str);
+	void modemReceive(const char* command);
 
     enum PROTOCOL_STEP {
         STX1,
@@ -38,6 +41,11 @@ public:
         DTX,
         CRC
     };
+
+    enum PROTOCOL_STATUS {
+    	WAITING,
+    	PAIRING
+    };
 private:
     uint8_t step;
     uint8_t len;
@@ -45,6 +53,13 @@ private:
     uint8_t buffer_pos;
     uint8_t crc;
     UAV *uav;
+    uint8_t bluetoothModemAck;
+    uint8_t connected;
+    uint8_t status;
+
+	char bufferBee[128];
+	uint8_t bufferBee_pos;
+	int8_t stepBee;
 
     void datasReceive(const uint8_t* datas);
 };

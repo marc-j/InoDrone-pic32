@@ -1,0 +1,3 @@
+[submodule "libraries/UAVLink"]
+      path = libraries/UAVLink
+      url = https://github.com/marc-j/UAVLink.git

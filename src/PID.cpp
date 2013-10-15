@@ -12,6 +12,8 @@ PID::PID(float kP, float kI, float kD) {
 	this->kI = kI;
 	this->kD = kD;
 
+	integral = 0;
+
 }
 
 void PID::resetIntegral()
@@ -24,14 +26,29 @@ void PID::setKp(float kP)
 	this->kP = kP;
 }
 
+float PID::getKp()
+{
+	return this->kP;
+}
+
 void PID::setKi(float kI)
 {
 	this->kI = kI;
 }
 
+float PID::getKi()
+{
+	return this->kI;
+}
+
 void PID::setKd(float kD)
 {
 	this->kD = kD;
+}
+
+float PID::getKd()
+{
+	return this->kD;
 }
 
 float PID::calculate(float error, float G_Dt) {

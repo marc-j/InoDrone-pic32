@@ -52,12 +52,18 @@ void IMU::init()
   mpu6050.initialize();
   delay(5);
 
+
+
   // Configure magneto
   I2C::writeByte(HMC5883_ADDRESS, 0x00, 0x70); //num samples: 8 ; output rate: 15Hz ; normal measurement mode
   I2C::writeByte(HMC5883_ADDRESS, 0x01, 0x20); //configuration gain 1.3Ga
   I2C::writeByte(HMC5883_ADDRESS, 0x02, 0x00); //continuous Conversion Mode
 
   mpu6050.enableI2CAux();
+
+  if (mpu6050.testConnection()) {
+	  PORTCbits.RC3 = 1;
+  }
 
   baro.init(MS561101BA_ADDR_CSB_LOW);
   delay(100);

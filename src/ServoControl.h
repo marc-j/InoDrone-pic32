@@ -19,9 +19,9 @@
 #define PB_CLOCK_1_5MS     (15*__PIC32_pbClk)/10000
 #define PB_CLOCK_2MS       (2*__PIC32_pbClk)/1000
 
-#define VAL_PPM_MAX        3000 //PB_CLOCK_2MS/64
+#define VAL_PPM_MAX        2500 //PB_CLOCK_2MS/64
 #define VAL_PPM_CENTER     PB_CLOCK_1_5MS/64
-#define VAL_PPM_MIN        700 //PB_CLOCK_1MS/64
+#define VAL_PPM_MIN        1300 //PB_CLOCK_1MS/64
 
 class ServoControl {
 public:

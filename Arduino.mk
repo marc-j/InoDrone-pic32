@@ -642,7 +642,7 @@ reset:
 		@if [ -z "$(ARD_PORT)" ]; then \
 			echo "No Arduino-compatible TTY device found -- exiting"; exit 2; \
 			fi
-		for STTYF in 'stty --file' 'stty -f' 'stty <' ; \
+		for STTYF in 'stty --file' ; \
 		  do $$STTYF /dev/tty >/dev/null 2>/dev/null && break ; \
 		done ;\
 		$$STTYF $(ARD_PORT)  hupcl ;\
