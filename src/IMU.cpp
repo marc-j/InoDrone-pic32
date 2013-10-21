@@ -10,18 +10,6 @@
 
 IMU::IMU()
 {
-  // initialize quaternion
-  q0 = 1.0f;
-  q1 = 0.0f;
-  q2 = 0.0f;
-  q3 = 0.0f;
-  twoKp = twoKpDef;
-  twoKi = twoKiDef;
-  integralFBx = 0.0f,  integralFBy = 0.0f, integralFBz = 0.0f;
-  lastUpdate = 0;
-  now = 0;
-  G_Dt = 0;
-
   // Sensors sens
   // ACC
   sensorsSens.ACC.x = 1;
@@ -43,6 +31,11 @@ IMU::IMU()
   accelOneG = GRAVITY;
   movavg_i = 0;
 
+  accSum = {0,0,0};
+  gyroSum = {0,0,0};
+
+  sampleCount = 0;
+
   baro = MS561101BA();
 }
 
@@ -51,8 +44,6 @@ void IMU::init()
   Wire.begin();
   mpu6050.initialize();
   delay(5);
-
-
 
   // Configure magneto
   I2C::writeByte(HMC5883_ADDRESS, 0x00, 0x70); //num samples: 8 ; output rate: 15Hz ; normal measurement mode
@@ -72,19 +63,11 @@ void IMU::init()
     movavg_buff[i] = baro.getPressure(MS561101BA_OSR_4096);
   }
 
-#ifdef _WITH_DCM_
-  dcm = DCM();
+  filters[0] = new FourtOrderFilter(0.0);
+  filters[1] = new FourtOrderFilter(0.0);
+  filters[2] = new FourtOrderFilter(-9.8065);
 
-  #ifdef HeadingMagHold
-  getMag(0.0, 0.0);
-  dcm.init(hdgX, hdgY);
-  #else
-  dcm.init(1.0, 0.0);
-  #endif
-#else
-  kalman = new Kalman();
-#endif
-
+  initKinematics();
 
   zeroGyro();
   zeroAccel();
@@ -120,11 +103,11 @@ void IMU::zeroAccel()
     tmpOffsets[2] += sensorsRaw.ACC.z;
   }
 
-  accOffset.x = tmpOffsets[0] / samples;
-  accOffset.y = tmpOffsets[1] / samples;
-  accOffset.z = tmpOffsets[2] / samples;
+  accOffset.x = float(tmpOffsets[0] / samples) * ACC_SCALE_X;
+  accOffset.y = float(tmpOffsets[1] / samples) * ACC_SCALE_Y;
+  accOffset.z = float(tmpOffsets[2] / samples) * ACC_SCALE_Z;
 
-  accelOneG = abs( (accOffset.z * ACC_SCALE_Z) - 0.5 );
+  accelOneG = abs( accOffset.z ); // ?
 }
 
 void IMU::getMotion9(IMU::motion9f* sensors)
@@ -140,7 +123,7 @@ void IMU::getMotion9(IMU::motion9f* sensors)
 
   sensors->ACC.x = ( (sensorsRaw.ACC.x - accOffset.x) / 16384.0f ) * sensorsSens.ACC.x; // 16384 LSB/g (+/- 2g)
   sensors->ACC.y = ( (sensorsRaw.ACC.y - accOffset.y) / 16384.0f ) * sensorsSens.ACC.y; // 16384 LSB/g (+/- 2g)
-  sensors->ACC.z = ( (sensorsRaw.ACC.z - accOffset.z) / 16384.0f ) * sensorsSens.ACC.z + 1; // 16384 LSB/g (+/- 2g)
+  sensors->ACC.z = ( (sensorsRaw.ACC.z - accOffset.z) / 16384.0f ) * sensorsSens.ACC.z;// + 1; // 16384 LSB/g (+/- 2g)
 
   sensors->GYRO.x = ( (sensorsRaw.GYRO.x - gyroOffset.x) / 16.4f ) * sensorsSens.GYRO.x; // 16.4 LSB/°/s (+/- 2000 °/s)
   sensors->GYRO.y = ( (sensorsRaw.GYRO.y - gyroOffset.y) / 16.4f ) * sensorsSens.GYRO.y; // 16.4 LSB/°/s (+/- 2000 °/s)
@@ -164,14 +147,30 @@ void IMU::getMotion9(IMU::motion9f* sensors)
   sensors->MAG.z -= ((magLimit.z.max + magLimit.z.min) / 2);*/
 
 }
+void IMU::sensorsSum()
+{
+	vector3 acc;
+	vector3 gyro;
+	mpu6050.getMotion6(&acc.y, &acc.x, &acc.z, &gyro.y, &gyro.x, &gyro.z);
+
+	accSum.x += acc.x;
+	accSum.y += acc.y;
+	accSum.z += acc.z;
+
+	gyroSum.x += gyro.x;
+	gyroSum.y += gyro.y;
+	gyroSum.z += gyro.z;
+
+	sampleCount++;
+}
 
 void IMU::getRawValues(int16_t* values)
 {
   mpu6050.getMotion9(&values[0], &values[1], &values[2],
-                     &values[4], &values[3], &values[5],
-                     &values[6], &values[8], &values[7]);
+                     &values[3], &values[4], &values[5],
+                     &values[6], &values[7], &values[8]);
 
-  values[0] *= sensorsSens.ACC.x;
+ /* values[0] *= sensorsSens.ACC.x;
   values[1] *= sensorsSens.ACC.y;
   values[2] *= sensorsSens.ACC.z;
 
@@ -181,51 +180,42 @@ void IMU::getRawValues(int16_t* values)
 
   values[6] *= sensorsSens.MAG.x;
   values[7] *= sensorsSens.MAG.y;
-  values[8] *= sensorsSens.MAG.z;
+  values[8] *= sensorsSens.MAG.z;*/
 }
 
-void IMU::getAttitude(IMU::attitude12f* attitude)
+void IMU::getAttitude(IMU::attitude12f* attitude, float G_Dt)
 {
-    now = micros();
-    G_Dt = (now - lastUpdate) / 1000000.0;
-    lastUpdate = now;
 
     motion9f values;
-    getMotion9(&values);
-    float angles[3];
+    vector3f angles;
 
-#ifdef _WITH_DCM_
+    //getMotion9(&values);
 
-    #ifdef HeadingMagHold
-    dcm.calculate( radians(values.GYRO.x), radians(values.GYRO.y), radians(values.GYRO.z),
-                   values.ACC.x, values.ACC.y, values.ACC.z,
-                   accelOneG, hdgX, hdgY,
-                   G_Dt
-                  );
-    #else
-    dcm.calculate( radians(values.GYRO.x), radians(values.GYRO.y), radians(values.GYRO.z),
-                   values.ACC.x, values.ACC.y, values.ACC.z,
-                   accelOneG, 0.0, 0.0,
-                   G_Dt
-                  );
-    #endif
+    const float gyroScale = (2000.0/65536.0) * toRad;// 32.8f * toRad; // 32.8 LSB/°/s (+/- 1000 °/s)
+    const float accScale  = 4096.0f;
 
-    dcm.getEuler(angles);
-#else
-    vector3f vAngles = getAccelAngle(&values.ACC);
+    values.GYRO.x = (((gyroSum.x / sampleCount) - gyroOffset.x) * gyroScale );// * sensorsSens.GYRO.x;
+    values.GYRO.y = (((gyroSum.y / sampleCount) - gyroOffset.y) * gyroScale );// * sensorsSens.GYRO.y;
+    values.GYRO.z = (((gyroSum.z / sampleCount) - gyroOffset.z) * gyroScale );// * sensorsSens.GYRO.z;
 
-    float heading = getHeading(vAngles, values.MAG);
-    vAngles.z = heading;
+    values.ACC.x = -( (accSum.x / sampleCount) * ACC_SCALE_X - accOffset.x );// * sensorsSens.ACC.x;
+    values.ACC.y = ( (accSum.y / sampleCount) * ACC_SCALE_Y - accOffset.y );// * sensorsSens.ACC.y;
+    values.ACC.z = ( (accSum.z / sampleCount) * ACC_SCALE_Z - accOffset.z ) - 9.8065;// * sensorsSens.ACC.z - 9.8065 ;
 
-    kalman->setAccValues(vAngles);
-    kalman->setGyroValues(values.GYRO, G_Dt);
+    values.ACC.x = filters[0]->compute(values.ACC.x);
+    values.ACC.y = filters[1]->compute(values.ACC.y);
+    values.ACC.z = filters[2]->compute(values.ACC.z);
 
-    vector3f kAngles = kalman->compute();
+    gyroSum = {0,0,0};
+    accSum = {0,0,0};
+    sampleCount = 0;
 
-    angles[0] = kAngles.x;//kalmanRoll->innovate(roll, values.GYRO.y, G_Dt);
-    angles[1] = kAngles.y;//kalmanPitch->innovate(pitch, values.GYRO.x, G_Dt);
-    angles[2] = kAngles.z;
-#endif
+    computeKinematics(values.GYRO.x, values.GYRO.y, values.GYRO.z,
+    				  values.ACC.x, values.ACC.y, values.ACC.z,
+    				  0,0,0,
+    				  G_Dt);
+
+    angles = getEulerAngles();
 
     attitude->ACC.x = values.ACC.x;
     attitude->ACC.y = values.ACC.y;
@@ -235,13 +225,9 @@ void IMU::getAttitude(IMU::attitude12f* attitude)
     attitude->GYRO.y = values.GYRO.y;
     attitude->GYRO.z = values.GYRO.z;
 
-    attitude->MAG.x = values.MAG.x;
-    attitude->MAG.y = values.MAG.y;
-    attitude->MAG.z = values.MAG.z;
-
-    attitude->EULER.roll = angles[0]; // roll
-    attitude->EULER.pitch = angles[1]; // pitch
-    attitude->EULER.yaw = angles[2]; // yaw
+    attitude->EULER.roll = angles.x; // roll
+    attitude->EULER.pitch = angles.y; // pitch
+    attitude->EULER.yaw = angles.z; // yaw
 }
 
 vector3f IMU::getAccelAngle(vector3f *acc)
@@ -354,10 +340,40 @@ vector3f IMU::getGyroMeasurementNoise()
     return variance;
 }
 
+void IMU::calculateHeading(float roll, float pitch, float* heading)
+{
+	vector3 mag;
+	mpu6050.getMag(&mag.x, &mag.z, &mag.y);
+
+	mag.x = ((mag.x * sensorsSens.MAG.x) - MAG_OFFSET_X) / 1090.0f;
+	mag.y = ((mag.y * sensorsSens.MAG.y) - MAG_OFFSET_Y) / 1090.0f;
+	mag.z = ((mag.z * sensorsSens.MAG.z) - MAG_OFFSET_Z) / 1090.0f;
+
+	const float cosRoll = cos(roll);
+	const float sinRoll = sin(roll);
+	const float cosPitch = cos(pitch);
+	const float sinPitch = sin(pitch);
+
+	const float magX = (float)mag.x * cosPitch +
+					   (float)mag.y * sinRoll * sinPitch +
+					   (float)mag.z * cosRoll * sinPitch;
+
+	const float magY = (float)mag.y * cosRoll -
+					   (float)mag.z * sinRoll;
+
+	const float tmp = sqrt(magX*magX + magY*magY);
+
+	hdgX = magX / tmp;
+	hdgY = -magY / tmp;
+
+	heading = 0;
+
+}
+
 /**
  *
  */
-float IMU::getHeading(vector3f acc, vector3f mag)
+/*float IMU::getHeading(vector3f acc, vector3f mag)
 {
 
 	float roll = acc.x * toRad;
@@ -386,8 +402,8 @@ float IMU::getHeading(vector3f acc, vector3f mag)
 	if (heading > 2*M_PI)
 		heading -= 2*M_PI;
 
-	return heading * toDeg;*/
-}
+	return heading * toDeg;--/
+}*/
 
 /**
  *

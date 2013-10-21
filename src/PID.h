@@ -12,7 +12,7 @@ class PID {
 public:
 	PID(float kP, float kI, float kD);
 	void resetIntegral();
-	float calculate(float error, float G_Dt);
+	float calculate(float target, float current, float G_Dt);
 
 	void setKp(float kP);
 	void setKi(float kI);

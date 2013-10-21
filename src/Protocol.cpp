@@ -175,10 +175,10 @@ void Protocol::datasReceive(const uint8_t* datas)
 			uavlink_message_command_t command;
 			uavlink_message_command_decode(&msg, &command);
 
-			uav->CMD.throttle 	= command.throttle;
+			/*uav->CMD.throttle 	= command.throttle;
 			uav->CMD.pitch 		= command.pitch;
 			uav->CMD.roll 		= command.roll;
-			uav->CMD.yaw 		= command.yaw;
+			uav->CMD.yaw 		= command.yaw;*/
 			uav->flightmode 	= command.flightMode;
 			uav->takeoff 		= command.armed;
 			break;
@@ -197,6 +197,8 @@ void Protocol::datasReceive(const uint8_t* datas)
 			uav->yawPID->setKp(pid.yawKP / 1000.0f);
 			uav->yawPID->setKi(pid.yawKI / 1000.0f);
 			uav->yawPID->setKd(pid.yawKD / 1000.0f);
+
+			this->uav->LED.startBlink(100, 10);
 			break;
 	}
 }

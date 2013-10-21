@@ -8,11 +8,12 @@
 #ifndef IMU_H_
 #define IMU_H_
 
+#include "UAV.h"
 #include "MPU6050.h"
 #include "MS561101BA.h"
-#include "DCM.h"
-#include "Kalman.h"
 #include "Matrix.h"
+#include "Kinematics.h"
+#include "FourtOrderFilter.h"
 
 #define twoKpDef  (2.0f * 0.5f) // 2 * proportional gain
 #define twoKiDef  (2.0f * 0.1f) // 2 * integral gain
@@ -26,9 +27,9 @@
 #define GRAVITY 1671.0f
 
 #define ACC_RES 2
-#define ACC_SCALE_X 0.0849344f
-#define ACC_SCALE_Y 0.0889208f
-#define ACC_SCALE_Z 0.0801823f
+#define ACC_SCALE_X -0.00120327f// -0.0926642f
+#define ACC_SCALE_Y 0.00119525f//  0.0564022f
+#define ACC_SCALE_Z -0.00117373f//  -0.0011841f
 
 #define ACC_OFFSET_X 1806
 #define ACC_OFFSET_Y -352
@@ -76,7 +77,10 @@ public:
   void getMotion9(motion9f*);
   void getRawValues(int16_t*);
 
-  void getAttitude(attitude12f*);
+  void sensorsSum();
+  void getAttitude(attitude12f*, float G_Dt);
+  void calculateHeading(float roll, float pitch, float* heading);
+
   float getAltitude();
 
   vector3f getAccelMeasurementNoise();
@@ -91,28 +95,23 @@ private:
 
   MPU6050 mpu6050;
   MS561101BA baro;
-#ifdef _WITH_DCM_
-  DCM dcm;
-#else
-  Kalman* kalman;
-#endif
 
   vector9 sensorsRaw;
   vector3 gyroOffset;
-  vector3 accOffset;
+  vector3f accOffset;
 
   motion9f sensorsSens;
   minmax3f magLimit;
 
+  vector3l accSum;
+  vector3l gyroSum;
+  uint8_t sampleCount;
+
+  FourtOrderFilter* filters[3];
+
   float movavg_buff[MOVAVG_SIZE];
   int movavg_i;
 
-  volatile float q0, q1, q2, q3;
-  float G_Dt;
-  volatile float twoKp;      // 2 * proportional gain (Kp)
-  volatile float twoKi;      // 2 * integral gain (Ki)
-  volatile float integralFBx,  integralFBy, integralFBz;
-  unsigned long lastUpdate, now; // sample period expressed in milliseconds
   float accelOneG;
 
   float hdgX, hdgY;

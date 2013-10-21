@@ -33,6 +33,11 @@
     float z;
   } vector3f;
 
+  typedef struct __vector3l {
+	  long x;
+	  long y;
+	  long z;
+  } vector3l;
 
   extern void vector_cross(const vector3f *a, const vector3f *b, vector3f *out);
   extern float vector_dot(const vector3f *a, const vector3f *b);

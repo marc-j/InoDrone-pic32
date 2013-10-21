@@ -51,7 +51,9 @@ float PID::getKd()
 	return this->kD;
 }
 
-float PID::calculate(float error, float G_Dt) {
+float PID::calculate(float target, float current, float G_Dt) {
+
+	float error = target - current;
 
 	float P = error * kP;
 

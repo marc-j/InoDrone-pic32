@@ -1,11 +1,11 @@
 /*
- * QCMath.cpp
+ * IDMath.cpp
  *
  *  Created on: 27 janv. 2013
  *      Author: marc
  */
 
-#include "QCMath.h"
+#include "IDMath.h"
 
 float vectorDotProduct(int length, float vector1[], float vector2[])
 {
@@ -100,5 +100,14 @@ void matrixAdd(int rows, int cols, float matrixC[], float matrixA[], float matri
   {
     matrixC[i] = matrixA[i] + matrixB[i];
   }
+}
+
+short isSwitched(float previousError, float currentError)
+{
+  if ( (previousError > 0 &&  currentError < 0) ||
+	   (previousError < 0 &&  currentError > 0)) {
+    return 1;
+  }
+  return 0;
 }
 

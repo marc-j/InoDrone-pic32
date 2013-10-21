@@ -19,6 +19,7 @@ Radio::Radio() {
 	throttle.setRange(1300, 2500);
 
 	armed.setSwitch();
+	mode.setSwitch();
 
 }
 
@@ -29,6 +30,7 @@ void Radio::update()
 	yaw.setPwm( _input.read(RC_YAW) );
 	throttle.setPwm( _input.read(RC_THROTTLE));
 	armed.setPwm( _input.read(RC_AUX1));
+	mode.setPwm( _input.read(RC_GEAR) );
 }
 
 

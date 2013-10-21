@@ -30,6 +30,7 @@ public:
 	RadioChannel yaw;
 	RadioChannel throttle;
 	RadioChannel armed;
+	RadioChannel mode;
 
 private:
 	RCInput _input;
