@@ -7,12 +7,17 @@
 
 #include "PID.h"
 
-PID::PID(float kP, float kI, float kD) {
+PID::PID(float kP, float kI, float kD, float kPStab, float kIStab)
+{
 	this->kP = kP;
 	this->kI = kI;
 	this->kD = kD;
 
+	this->kPStab = kPStab;
+	this->kIStab = kIStab;
+
 	integral = 0;
+	lastError = 0;
 
 }
 
@@ -51,20 +56,53 @@ float PID::getKd()
 	return this->kD;
 }
 
+void PID::setKpStab(float kP)
+{
+    this->kPStab = kP;
+}
+
+float PID::getKpStab()
+{
+    return this->kPStab;
+}
+
+void PID::setKiStab(float kI)
+{
+    this->kIStab = kI;
+}
+
+float PID::getKiStab()
+{
+    return this->kIStab;
+}
+
 float PID::calculate(float target, float current, float G_Dt) {
 
 	float error = target - current;
 
-	float P = error * kP;
-
 	integral += (error*G_Dt);
-	float I = integral*kI;
+	if (integral > PID_I_GUARD) integral = PID_I_GUARD;
+	if (integral < -PID_I_GUARD) integral = -PID_I_GUARD;
 
 	float errorDiff = error - lastError;
 	lastError = error;
 
-	float D = errorDiff * kD;
+	return (error * kP) + (integral * kI) + (errorDiff * kD);
+}
 
-	return P + I + D;
+float PID::calculate(float target, float angle, float gyro, float G_Dt) {
+
+    float errorAngle = target - angle;
+
+    integral += (errorAngle*G_Dt);
+    if (integral > PID_I_GUARD) integral = PID_I_GUARD;
+    if (integral < -PID_I_GUARD) integral = -PID_I_GUARD;
+
+
+    float errorSum = gyro - lastError;
+    lastError = gyro;
+
+
+    return ((errorAngle * kPStab) - (gyro*kP)) + (integral * kIStab) - (errorSum * kD);
 }
 

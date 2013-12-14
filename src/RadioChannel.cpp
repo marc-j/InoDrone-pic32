@@ -75,7 +75,11 @@ int16_t RadioChannel::getAngle()
 
 uint8_t RadioChannel::getBoolean()
 {
-	return _radioIn > RADIO_CENTER;
+        if (_radioIn > (RADIO_CENTER+150)) {
+            return true;
+        } else {
+            return false;
+        }
 }
 
 int16_t RadioChannel::constrainInt16(int16_t value, int16_t min, int16_t max)

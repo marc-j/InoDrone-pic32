@@ -13,7 +13,10 @@
 
 #include <inttypes.h>
 
-#define T2_PERIOD (( __PIC32_pbClk / 64 / 100) - 1) //((PR2VAL  + 1) * 8 / __PIC32_pbClk) 10ms
+#define PWM_PERIOD_SPEED 200 // 200Hz , 5ms
+//#define PWM_PERIOD_SPEED 400 //400Hz , 2.5ms (if ESC compatible)
+
+#define T2_PERIOD (( __PIC32_pbClk / 64 / 200) - 1) // 200Hz timer ((PR2VAL  + 1) * 8 / __PIC32_pbClk) 10ms
 
 #define PB_CLOCK_1MS       __PIC32_pbClk/1000
 #define PB_CLOCK_1_5MS     (15*__PIC32_pbClk)/10000

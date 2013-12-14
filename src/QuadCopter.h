@@ -17,7 +17,23 @@
 #include "UAVLink.h"
 #include "PID.h"
 #include "UAV.h"
+#include "ISRRegistry.h"
 
+
+#include "Kinematics.h"
+#if defined(_IMU_ARG)
+	#include "Kinematics_ARG.h"
+#elif defined(_IMU_AHRS)
+    #include "Kinematics_AHRS.h"
+#else
+	#error No kenamtics defined for IMU
+#endif
+
+#include "Sonar.h"
+#ifdef SONAR_MAX
+	#define SONAR
+	#include "MaxSonar.h"
+#endif
 
 #define LEDRED_ON PORTFbits.RF3 = 1;
 #define LEDRED_OFF PORTFbits.RF3 = 0;
@@ -64,9 +80,10 @@ float G_Dt	= 0.01; //Integration time
 
 float cpu_load=0;
 
-IMU imu;
+IMU* imu;
 UAV uav;
 ServoControl motor;
+ISRRegistry *isrRegistry;
 
 
 /**

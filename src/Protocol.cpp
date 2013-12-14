@@ -186,17 +186,21 @@ void Protocol::datasReceive(const uint8_t* datas)
 			uavlink_message_pid_t pid;
 			uavlink_message_pid_decode(&msg, &pid);
 
-			uav->rollPID->setKp(pid.rollKP / 1000.0f);
-			uav->rollPID->setKi(pid.rollKI / 1000.0f);
-			uav->rollPID->setKd(pid.rollKD / 1000.0f);
+			uav->rollPID->setKp(pid.rollKP / 100.0f);
+			uav->rollPID->setKi(pid.rollKI / 100.0f);
+			uav->rollPID->setKd(pid.rollKD / 100.0f);
+			uav->rollPID->setKpStab(pid.stabKP / 100.0f);
+                        uav->rollPID->setKiStab(pid.stabKI / 100.0f);
 
-			uav->pitchPID->setKp(pid.pitchKP / 1000.0f);
-			uav->pitchPID->setKi(pid.pitchKI / 1000.0f);
-			uav->pitchPID->setKd(pid.pitchKD / 1000.0f);
+			uav->pitchPID->setKp(pid.pitchKP / 100.0f);
+			uav->pitchPID->setKi(pid.pitchKI / 100.0f);
+			uav->pitchPID->setKd(pid.pitchKD / 100.0f);
+                        uav->pitchPID->setKpStab(pid.stabKP / 100.0f);
+                        uav->pitchPID->setKiStab(pid.stabKI / 100.0f);
 
-			uav->yawPID->setKp(pid.yawKP / 1000.0f);
-			uav->yawPID->setKi(pid.yawKI / 1000.0f);
-			uav->yawPID->setKd(pid.yawKD / 1000.0f);
+			uav->yawPID->setKp(pid.yawKP / 100.0f);
+			uav->yawPID->setKi(pid.yawKI / 100.0f);
+			uav->yawPID->setKd(pid.yawKD / 100.0f);
 
 			this->uav->LED.startBlink(100, 10);
 			break;

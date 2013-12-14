@@ -13,6 +13,7 @@
 #include "MS561101BA.h"
 #include "Matrix.h"
 #include "Kinematics.h"
+#include "Sonar.h"
 #include "FourtOrderFilter.h"
 
 #define twoKpDef  (2.0f * 0.5f) // 2 * proportional gain
@@ -24,12 +25,12 @@
  * [-612.33327827112589, 1679.4716140499254, 341.26608457168271]
  * [12749.228483890431, 16741.059282305599, 20494.275611442848]
  */
-#define GRAVITY 1671.0f
+//#define GRAVITY 1671.0f
 
 #define ACC_RES 2
-#define ACC_SCALE_X -0.00120327f// -0.0926642f
-#define ACC_SCALE_Y 0.00119525f//  0.0564022f
-#define ACC_SCALE_Z -0.00117373f//  -0.0011841f
+#define ACC_SCALE_X 0.00119142f// -0.0926642f
+#define ACC_SCALE_Y -0.00120331f//  0.0564022f
+#define ACC_SCALE_Z -0.00117388f//  -0.0011841f
 
 #define ACC_OFFSET_X 1806
 #define ACC_OFFSET_Y -352
@@ -43,7 +44,7 @@
 
 class IMU {
 public:
-  IMU();
+  IMU(Sonar* sonar);
 
   typedef struct __motion9f {
     vector3f ACC;
@@ -79,9 +80,11 @@ public:
 
   void sensorsSum();
   void getAttitude(attitude12f*, float G_Dt);
+  void getCompass(vector3f* mag);
   void calculateHeading(float roll, float pitch, float* heading);
 
   float getAltitude();
+  float getSonarDistance();
 
   vector3f getAccelMeasurementNoise();
   vector3f getGyroMeasurementNoise();
@@ -108,6 +111,7 @@ private:
   uint8_t sampleCount;
 
   FourtOrderFilter* filters[3];
+  Sonar* sonar;
 
   float movavg_buff[MOVAVG_SIZE];
   int movavg_i;

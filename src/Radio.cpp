@@ -14,7 +14,7 @@ Radio::Radio() {
 
 	roll.setAngle(45);
 	pitch.setAngle(45);
-	yaw.setAngle(90);
+	yaw.setAngle(180);
 
 	throttle.setRange(1300, 2500);
 

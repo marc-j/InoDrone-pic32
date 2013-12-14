@@ -24,11 +24,7 @@ void ServoControl::init()
 	OpenOC4( OC_ON | OC_TIMER3_SRC | OC_TIMER_MODE16 | OC_PWM_FAULT_PIN_DISABLE, VAL_PPM_MIN, VAL_PPM_MIN);
 
 	// init Timer2 mode and period (PR2)
-	// Fpb = SYS_FREQ = 80Mhz (From configuration in bootloader code)
-	// Timer Prescale = 8
-	// PR2 = 0x9C3F = 39999
-	// interrupts every 4 ms
-	// 4 ms = (PR2 + 1) * TMR Prescale / Fpb = (39999 + 1) * 8 / 80000000
+	// 5 ms = (PR2 + 1) * TMR Prescale / Fpb = (6249 + 1) * 8 / 80000000
 	CloseTimer3();
 	OpenTimer3(T3_ON | T3_PS_1_64, T2_PERIOD);
 	/*ConfigIntTimer2(T2_INT_ON | T2_INT_PRIOR_7);
@@ -41,6 +37,8 @@ void ServoControl::init()
 	OC2RS = VAL_PPM_MIN;//VAL_PPM_MIN;
 	OC3RS = VAL_PPM_MIN;//VAL_PPM_MIN;
 	OC4RS = VAL_PPM_MIN;
+
+	delay(500);
 }
 
 void ServoControl::setMotor(uint8_t motor, uint16_t value)

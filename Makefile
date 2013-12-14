@@ -2,7 +2,7 @@ TARGET       = quadcopteremb
 BOARD_TAG    = mega_pic32
 
 ARDUINO_LIBS = Wire Wire/utility
-USER_LIBS_SEL = I2C MPU6050 MS5611 SRF05 UAVLink/include ID_Math ID_Matrix ID_Kinematics
+USER_LIBS_SEL = I2C MPU6050 MS5611 ID_Sonar UAVLink/include ID_Math ID_Matrix ID_Kinematics
 
 SKIP_SUFFIX_CHECK = 1
 

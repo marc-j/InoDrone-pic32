@@ -8,7 +8,8 @@
 #include "IMU.h"
 #include "math.h"
 
-IMU::IMU()
+IMU::IMU(Sonar* sonar):
+	sonar(sonar)
 {
   // Sensors sens
   // ACC
@@ -75,7 +76,7 @@ void IMU::init()
 
 void IMU::zeroGyro()
 {
-  const int samples = 1000;
+  const int samples = 400;
   long tmpOffsets[] = {0,0,0};
 
   for (int i=0; i < samples; i++) {
@@ -83,6 +84,8 @@ void IMU::zeroGyro()
     tmpOffsets[0] += sensorsRaw.GYRO.x;
     tmpOffsets[1] += sensorsRaw.GYRO.y;
     tmpOffsets[2] += sensorsRaw.GYRO.z;
+
+    delayMicroseconds(2500);
   }
 
   gyroOffset.x = tmpOffsets[0] / samples;
@@ -93,14 +96,16 @@ void IMU::zeroGyro()
 
 void IMU::zeroAccel()
 {
-  const int samples = 100;
+  const int samples = 400;
   long tmpOffsets[] = {0,0,0};
 
   for (int i=0; i < samples; i++) {
-    mpu6050.getAcceleration(&sensorsRaw.ACC.x,&sensorsRaw.ACC.y,&sensorsRaw.ACC.z);
+    mpu6050.getAcceleration(&sensorsRaw.ACC.y,&sensorsRaw.ACC.x,&sensorsRaw.ACC.z);
     tmpOffsets[0] += sensorsRaw.ACC.x;
     tmpOffsets[1] += sensorsRaw.ACC.y;
     tmpOffsets[2] += sensorsRaw.ACC.z;
+
+    delayMicroseconds(2500);
   }
 
   accOffset.x = float(tmpOffsets[0] / samples) * ACC_SCALE_X;
@@ -166,8 +171,8 @@ void IMU::sensorsSum()
 
 void IMU::getRawValues(int16_t* values)
 {
-  mpu6050.getMotion9(&values[0], &values[1], &values[2],
-                     &values[3], &values[4], &values[5],
+  mpu6050.getMotion9(&values[1], &values[0], &values[2],
+                     &values[4], &values[3], &values[5],
                      &values[6], &values[7], &values[8]);
 
  /* values[0] *= sensorsSens.ACC.x;
@@ -191,7 +196,7 @@ void IMU::getAttitude(IMU::attitude12f* attitude, float G_Dt)
 
     //getMotion9(&values);
 
-    const float gyroScale = (2000.0/65536.0) * toRad;// 32.8f * toRad; // 32.8 LSB/°/s (+/- 1000 °/s)
+    const float gyroScale = TO_RAD(1 / 32.8f);// 32.8f * toRad; // 32.8 LSB/°/s (+/- 1000 °/s)
     const float accScale  = 4096.0f;
 
     values.GYRO.x = (((gyroSum.x / sampleCount) - gyroOffset.x) * gyroScale );// * sensorsSens.GYRO.x;
@@ -200,7 +205,10 @@ void IMU::getAttitude(IMU::attitude12f* attitude, float G_Dt)
 
     values.ACC.x = -( (accSum.x / sampleCount) * ACC_SCALE_X - accOffset.x );// * sensorsSens.ACC.x;
     values.ACC.y = ( (accSum.y / sampleCount) * ACC_SCALE_Y - accOffset.y );// * sensorsSens.ACC.y;
-    values.ACC.z = ( (accSum.z / sampleCount) * ACC_SCALE_Z - accOffset.z ) - 9.8065;// * sensorsSens.ACC.z - 9.8065 ;
+    values.ACC.z = -(( (accSum.z / sampleCount) * ACC_SCALE_Z - accOffset.z ) - 9.8065);// * sensorsSens.ACC.z - 9.8065 ;
+    /*values.ACC.x =  ( ((float)(accSum.x / sampleCount)) - ACC_X_OFFSET ) * ACC_X_SCALE;
+    values.ACC.y =  ( (accSum.y / sampleCount) - ACC_Y_OFFSET ) * ACC_Y_SCALE;
+    values.ACC.z = -( (accSum.z / sampleCount) - ACC_Z_OFFSET ) * ACC_Z_SCALE;*/
 
     values.ACC.x = filters[0]->compute(values.ACC.x);
     values.ACC.y = filters[1]->compute(values.ACC.y);
@@ -212,7 +220,7 @@ void IMU::getAttitude(IMU::attitude12f* attitude, float G_Dt)
 
     computeKinematics(values.GYRO.x, values.GYRO.y, values.GYRO.z,
     				  values.ACC.x, values.ACC.y, values.ACC.z,
-    				  0,0,0,
+    				  attitude->MAG.x, attitude->MAG.y, attitude->MAG.z,
     				  G_Dt);
 
     angles = getEulerAngles();
@@ -221,11 +229,11 @@ void IMU::getAttitude(IMU::attitude12f* attitude, float G_Dt)
     attitude->ACC.y = values.ACC.y;
     attitude->ACC.z = values.ACC.z;
 
-    attitude->GYRO.x = values.GYRO.x;
+    attitude->GYRO.x = -values.GYRO.x;
     attitude->GYRO.y = values.GYRO.y;
     attitude->GYRO.z = values.GYRO.z;
 
-    attitude->EULER.roll = angles.x; // roll
+    attitude->EULER.roll = -angles.x; // roll
     attitude->EULER.pitch = angles.y; // pitch
     attitude->EULER.yaw = angles.z; // yaw
 }
@@ -340,14 +348,20 @@ vector3f IMU::getGyroMeasurementNoise()
     return variance;
 }
 
+void IMU::getCompass(vector3f* mag)
+{
+	vector3 value;
+	mpu6050.getMag(&value.y, &value.z, &value.x);
+
+	mag->x = -(value.x - MAG_X_OFFSET) * MAG_X_SCALE;
+	mag->y = -(value.y - MAG_Y_OFFSET) * MAG_Y_SCALE;
+	mag->z = (value.z - MAG_Z_OFFSET) * MAG_Z_SCALE;
+}
+
 void IMU::calculateHeading(float roll, float pitch, float* heading)
 {
-	vector3 mag;
-	mpu6050.getMag(&mag.x, &mag.z, &mag.y);
-
-	mag.x = ((mag.x * sensorsSens.MAG.x) - MAG_OFFSET_X) / 1090.0f;
-	mag.y = ((mag.y * sensorsSens.MAG.y) - MAG_OFFSET_Y) / 1090.0f;
-	mag.z = ((mag.z * sensorsSens.MAG.z) - MAG_OFFSET_Z) / 1090.0f;
+	vector3f mag;
+	getCompass(&mag);
 
 	const float cosRoll = cos(roll);
 	const float sinRoll = sin(roll);
@@ -366,7 +380,7 @@ void IMU::calculateHeading(float roll, float pitch, float* heading)
 	hdgX = magX / tmp;
 	hdgY = -magY / tmp;
 
-	heading = 0;
+	*heading = atan2f(hdgX, hdgY);
 
 }
 
@@ -426,4 +440,9 @@ float IMU::getAltitude()
 
 	return baro.getAltitude(press, temperature);
 
+}
+
+float IMU::getSonarDistance()
+{
+	return sonar->getDistance();
 }

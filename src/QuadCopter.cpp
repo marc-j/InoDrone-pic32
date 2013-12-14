@@ -26,16 +26,6 @@
 
 #include "QuadCopter.h"
 
-#include "Kinematics.h"
-#if defined(_IMU_ARG)
-	#include "Kinematics_ARG.h"
-#elif defined(_IMU_AHRS)
-    #include "Kinematics_AHRS.h"
-#else
-	#error No kenamtics defined for IMU
-#endif
-
-
 uavlink_message_sensor_t sensor;
 uavlink_message_sensor_raw_t sensorRaw;
 uavlink_message_system_t systemInfo;
@@ -73,8 +63,9 @@ void sendMessage(uavlink_message_t msg)
 void setup()
 {
 
-	// SciLab serial
+#ifdef DEBUG
 	Serial.begin(115200);
+#endif
 
 	TRISCbits.TRISC2 = 0; // RC2 to output blue
 	TRISCbits.TRISC3 = 0; // RC3 to output yellow
@@ -91,23 +82,26 @@ void setup()
 	uav.flightmode = FLIGHTMODE_RATE;//FLIGHTMODE_WAITING;
 	uav.takeoff = 0;
 
-	uav.rollPID = new PID(0.8f,0.0f,0.0f);
-	uav.rollAttRatePID = new PID(1.75f, 0.0f, -6.1f);
-	uav.pitchPID = new PID(0.8f,0.0f,0.0f);
-	uav.pitchAttRatePID = new PID(1.75f, 0.0f, -6.1f);
-
-	uav.yawPID = new PID(1.0f,0.0f,0.0f);
+	// INIT PID
+	uav.rollPID = new PID(1.4f, 0.0f, 8.0f, 0.0f, 0.0f);
+	uav.pitchPID = new PID(1.4f,  0.0f, 8.0f, 0.0f, 0.0f);
+	uav.yawPID = new PID(100.0f, 2.5f, 0.0f, 0.0f, 0.0f);
 
 	// Init timer2 for PPM and Sonar
 	OpenTimer2( T2_ON | T2_PS_1_64, 0xFFFF);
 
 	uav.rc = new Radio();
 
-	imu = IMU();
-	imu.init();
-
 	motor = ServoControl();
 	motor.init();
+
+	isrRegistry = new ISRRegistry();
+
+	MaxSonar* sonar = new MaxSonar();
+	//sonar->init(isrRegistry);
+
+	imu = new IMU(sonar);
+	imu->init();
 
 	protocol.start(&uav);
 
@@ -124,7 +118,7 @@ void setup()
  */
 void Task1000Hz()
 {
-	imu.sensorsSum();
+	imu->sensorsSum();
 }
 
 /**
@@ -137,11 +131,13 @@ void Task100Hz()
 
 	uav.rc->update();
 	uav.takeoff = uav.rc->armed.isOn;
+	if (uav.flightmode != uav.rc->mode.isOn) {
+		uav.LED.startBlink(100, 6);
+	}
+
 	uav.flightmode = uav.rc->mode.isOn;
 
-
-
-	imu.getAttitude(&attitude, G_Dt);
+	imu->getAttitude(&attitude, G_Dt);
 
 	if (uav.takeoff == 0 ) {
 		STOP_MOTOR; // Stop motor
@@ -160,18 +156,40 @@ void Task100Hz()
 		} else {
 			uint16_t thrust = uav.rc->throttle.value;
 
-			float stabRoll  = uav.rollPID->calculate(uav.rc->roll.value, -attitude.EULER.roll, G_Dt);
-			float stabPitch = uav.pitchPID->calculate(uav.rc->pitch.value, attitude.EULER.pitch, G_Dt);
-			float stabYaw   = uav.yawPID->calculate(uav.rc->yaw.value, attitude.GYRO.z, G_Dt);
+			float stabRoll  = uav.rollPID->calculate(radians(uav.rc->roll.value), attitude.EULER.roll, attitude.GYRO.x, G_Dt);
+			float stabPitch = uav.pitchPID->calculate(radians(uav.rc->pitch.value), attitude.EULER.pitch, attitude.GYRO.y, G_Dt);
+			float stabYaw  = uav.yawPID->calculate(radians(uav.rc->yaw.value), attitude.GYRO.z, G_Dt); // CMD to radians (Gyro rad/s)
 
 			// Apply gyro rate PID
-			stabRoll = uav.rollAttRatePID->calculate(stabRoll, -attitude.GYRO.x ,G_Dt);
-			stabPitch = uav.pitchAttRatePID->calculate(stabPitch, attitude.GYRO.y ,G_Dt);
+			// TODO : remove if (test only)
+			if ( uav.flightmode == FLIGHTMODE_ATTITUDE ) {}
 
 			uav.MOTOR.FL = MIX(+1,-1,-1); //constrain(thrust + stabRoll - stabPitch, VAL_PPM_MIN, VAL_PPM_MAX);
 			uav.MOTOR.FR = MIX(-1,-1,+1); //constrain(thrust - stabRoll - stabPitch, VAL_PPM_MIN, VAL_PPM_MAX); //MIX(-1,-1,+1);
 			uav.MOTOR.RL = MIX(+1,+1,+1); //constrain(thrust + stabRoll + stabPitch, VAL_PPM_MIN, VAL_PPM_MAX); //MIX(+1,+1,+1);
 			uav.MOTOR.RR = MIX(-1,+1,-1); //constrain(thrust - stabRoll + stabPitch, VAL_PPM_MIN, VAL_PPM_MAX); //MIX(-1,+1,-1);
+
+			#ifdef DEBUG
+			Serial.print(stabRoll);
+			Serial.print(' ');
+			Serial.print(stabPitch);
+			Serial.print(' ');
+			Serial.print(stabYaw);
+			Serial.print(' ');
+			Serial.print(attitude.EULER.roll);
+			Serial.print(' ');
+			Serial.print(attitude.EULER.pitch);
+			Serial.print(' ');
+			Serial.print(attitude.EULER.yaw);
+			Serial.print(' ');
+			Serial.print(uav.MOTOR.FL);
+			Serial.print(' ');
+			Serial.print(uav.MOTOR.FR);
+			Serial.print(' ');
+			Serial.print(uav.MOTOR.RL);
+			Serial.print(' ');
+			Serial.println(uav.MOTOR.RR);
+			#endif
 
 			uint16_t motorMax = uav.MOTOR.FL;
 			if (uav.MOTOR.FR>motorMax) motorMax = uav.MOTOR.FR;
@@ -194,6 +212,10 @@ void Task100Hz()
 			uav.MOTOR.FR = constrain(uav.MOTOR.FR, VAL_PPM_MIN, VAL_PPM_MAX);
 			uav.MOTOR.RL = constrain(uav.MOTOR.RL, VAL_PPM_MIN, VAL_PPM_MAX);
 			uav.MOTOR.RR = constrain(uav.MOTOR.RR, VAL_PPM_MIN, VAL_PPM_MAX);
+
+			uav.ATTITUDE.roll = stabRoll;
+			uav.ATTITUDE.pitch = stabPitch;
+			uav.ATTITUDE.yaw = stabYaw;
 		}
 	}
 
@@ -213,13 +235,16 @@ void Task10Hz()
 	task10HZtimer = mainTimer;
 
 	// TODO calculate magnetometer
-	imu.calculateHeading(attitude.EULER.roll, attitude.EULER.pitch, &attitude.EULER.yaw);
-
+	//imu->calculateHeading(attitude.EULER.roll, attitude.EULER.pitch, &attitude.EULER.yaw);
+	imu->getCompass(&attitude.MAG);
+	//imu.triggerSonar();
 
 	/*int16_t sraw[9];
 	imu.getRawValues(sraw);*/
+	int16_t sraw[9];
+	imu->getRawValues(sraw);
 
-
+#ifdef DEBUG
 	/*Serial.print(attitude.ACC.x);
 	Serial.print(' ');
 	Serial.print(attitude.ACC.y);
@@ -232,11 +257,12 @@ void Task10Hz()
 	Serial.print(' ');
 	Serial.print(attitude.GYRO.z);
 	Serial.print(' ');
-	Serial.print(attitude.EULER.roll);
+	Serial.print(-attitude.EULER.roll);
 	Serial.print(' ');
 	Serial.print(attitude.EULER.pitch);
 	Serial.print(' ');
-	Serial.println(attitude.EULER.yaw);*/
+	Serial.println(-attitude.EULER.yaw);*/
+#endif
 
 	// TODO send telemetry
 	sensor.accX = (int16_t) (attitude.ACC.x*1000.0f);
@@ -245,12 +271,15 @@ void Task10Hz()
 	sensor.gyroX = (int16_t) (attitude.GYRO.x*10.0f);
 	sensor.gyroY = (int16_t) (attitude.GYRO.y*10.0f);
 	sensor.gyroZ = (int16_t) (attitude.GYRO.z*10.0f);
-    sensor.magX = (int16_t) (attitude.MAG.x*10.0f);
-    sensor.magY = (int16_t) (attitude.MAG.y*10.0f);
-    sensor.magZ = (int16_t) (attitude.MAG.z*10.0f);
+        sensor.magX = (int16_t) (attitude.MAG.x*10.0f);
+        sensor.magY = (int16_t) (attitude.MAG.y*10.0f);
+        sensor.magZ = (int16_t) (attitude.MAG.z*10.0f);
 	sensor.pitch = (int16_t) (attitude.EULER.pitch*10.0f);
 	sensor.roll = (int16_t) (attitude.EULER.roll*10.0f);
 	sensor.yaw = (int16_t) (attitude.EULER.yaw*10.0f);
+	sensor.stabRoll = (int16_t) (uav.ATTITUDE.roll*100.0f);
+	sensor.stabPitch = (int16_t) (uav.ATTITUDE.pitch*100.0f);
+	sensor.stabYaw = (int16_t) (uav.ATTITUDE.yaw*100.0f);
 
 	sendMessage(uavlink_message_sensor_encode(&sensor));
 
@@ -261,8 +290,7 @@ void Task10Hz()
 	sendMessage(uavlink_message_motor_encode(&motorInfo));
 
 	// Send raw sensor values
-	/*int16_t sraw[9];
-	imu.getRawValues(sraw);
+
 	sensorRaw.accX = sraw[0];
 	sensorRaw.accY = sraw[1];
 	sensorRaw.accZ = sraw[2];
@@ -273,7 +301,7 @@ void Task10Hz()
 	sensorRaw.magY = sraw[7];
 	sensorRaw.magZ = sraw[8];
 
-	sendMessage(uavlink_message_sensor_raw_encode(&sensorRaw));*/
+	sendMessage(uavlink_message_sensor_raw_encode(&sensorRaw));
 
 
 	systemInfo.cpuLoad = (uint16_t) (cpu_load*1000.0f);

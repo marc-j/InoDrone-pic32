@@ -57,8 +57,8 @@ void initKinematics()
 	prevEy = 0.0;
 	prevEz = 0.0;
 
-	Kp = 0.2; //0.2;	// 0.2;
-	Ki = 0.0005; //0.0005;
+	Kp = 0.2;
+	Ki = 0.0005;
 }
 
 void computeKinematics(float gx, float gy, float gz, float ax, float ay, float az, float magX, float magY, float magZ, float G_Dt)
@@ -122,12 +122,7 @@ vector3f getEulerAngles()
 {
 	vector3f angles;
 
-	/*
-	 *      phi = atan2(2 * ASq_3 * ASq_4 - 2 * ASq_1 * ASq_2, 2 * ASq_1 * ASq_1 + 2 * ASq_4 * ASq_4 - 1);
-    	    theta = asin(2 * ASq_2 * ASq_3 - 2 * ASq_1 * ASq_3);
-    		psi = atan2(2 * ASq_2 * ASq_3 - 2 * ASq_1 * ASq_4, 2 * ASq_1 * ASq_1 + 2 * ASq_2 * ASq_2 - 1);
-	 */
-
+	// c.f: http://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
 	angles.x = degrees( atan2(2 * (q0*q1 + q2*q3), 1 - 2 *(q1*q1 + q2*q2)) );
 	angles.y = degrees( asin(2 * (q0*q2 - q1*q3)) );
 	angles.z = degrees( atan2(2 * (q0*q3 + q1*q2), 1 - 2 *(q2*q2 + q3*q3)) ); //atan2(2 * (q1q2 + q0q3), q0q0 + q1q1 - q2q2 - q3q3);
